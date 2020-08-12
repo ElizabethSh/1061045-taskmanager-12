@@ -1,3 +1,31 @@
+export const RenderPosition = {
+  AFTERBEGIN: `afterbegin`,
+  BEFOREEND: `beforeend`
+};
+
+export const render = (container, element, position) => {
+  switch (position) {
+    case RenderPosition.AFTERBEGIN:
+      container.prepend(element);
+      break;
+    case RenderPosition.BEFOREEND:
+      container.append(element);
+      break;
+  }
+};
+
+export const renderTemplate = (container, template, position) => {
+  container.insertAdjacentHTML(position, template);
+};
+
+// функция для превращения щаблонной строки в разметку (DOM-элемент)
+export const createElement = (template) => {
+  const newElement = document.createElement(`div`); // создаем пустой div
+  newElement.innerHTML = template; // берем HTML в виде строки и вкладываем в div, превращая в DOM-элемент
+
+  return newElement.firstChild; // возвращаем этот DOM-элемент
+};
+
 export const getCurrentDate = () => {
   const currentDate = new Date();
   currentDate.setHours(23, 59, 59, 999); // будем считать срок у всех задач - это 23:59:59 установленной даты
@@ -42,3 +70,4 @@ export const isTaskExpiringToday = (dueDate) => {
 export const isTaskRepeating = (repeating) => {
   return Object.values(repeating).some(Boolean);
 };
+
