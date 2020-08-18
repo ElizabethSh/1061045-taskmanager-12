@@ -8,20 +8,28 @@ import LoadMoreButtonView from "../view/load-button.js";
 import {render, RenderPosition, replace, remove} from "../utils/render.js";
 
 const TASK_COUNT_PER_STEP = 8;
+
 export default class Board {
   constructor(boardContainer) {
     this._boardContainer = boardContainer;
+    this._renderTaskCount = TASK_COUNT_PER_STEP;
 
     this._boardComponent = new BoardView();
     this._sortComponent = new SortView();
     this._taskListComponent = new TaskListView();
     this._noTaskComponent = new NoTaskView();
+    this._loadMoreButtonComponent = new LoadMoreButtonView();
+    this._handleLoadMoreButtonClick = this._handleLoadMoreButtonClick.bind(this);
   }
 
   init(boardTasks) {
+    // бэкап списка задач
     this._boardTasks = boardTasks.slice();
 
+    // отрисовывает доску со всем содержимым
     render(this._boardContainer, this._boardComponent, RenderPosition.BEFOREEND);
+
+    // отрисовываем список задач
     render(this._boardComponent, this._taskListComponent, RenderPosition.BEFOREEND);
 
     this._renderBoard();
@@ -79,22 +87,18 @@ export default class Board {
   }
 
 
+  _handleLoadMoreButtonClick() {
+    this._renderTasks(this._renderTaskCount, this._renderTaskCount + TASK_COUNT_PER_STEP);
+    this._renderTaskCount += TASK_COUNT_PER_STEP;
+
+    if (this._renderTaskCount >= this._boardTasks.length) {
+      remove(this._loadMoreButtonComponent); // не работает
+    }
+  }
+
   _renderLoadMoreButton() {
-    let renderedTaskCount = TASK_COUNT_PER_STEP;
-    const loadMoreButtonComponent = new LoadMoreButtonView();
-
-    render(this._boardComponent, loadMoreButtonComponent, RenderPosition.BEFOREEND);
-
-    loadMoreButtonComponent.setClickHandler(() => {
-      this._boardTasks
-        .slice(renderedTaskCount, renderedTaskCount + TASK_COUNT_PER_STEP)
-        .forEach((boardTask) => this._renderTask(boardTask));
-      renderedTaskCount += TASK_COUNT_PER_STEP;
-
-      if (renderedTaskCount >= this._boardTasks.length) {
-        remove(loadMoreButtonComponent);
-      }
-    });
+    render(this._boardComponent, this._loadMoreButtonComponent, RenderPosition.BEFOREEND);
+    this._loadMoreButtonComponent.setClickHandler(this._handleLoadMoreButtonClick);
   }
 
   _renderTaskList() {
@@ -106,12 +110,13 @@ export default class Board {
   }
 
   _renderBoard() {
+    // если все задачи в архиве, рисуй заглушку
     if (this._boardTasks.every((task) => task.isArchive)) {
       this._renderNoTasks();
       return;
     }
 
-    this._renderSort();
-    this._renderTaskList();
+    this._renderSort(); // рисует сортировку
+    this._renderTaskList(); // рисует список задач
   }
 }
