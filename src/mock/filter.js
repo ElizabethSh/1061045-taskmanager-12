@@ -1,4 +1,4 @@
-import {isTaskExpired, isTaskExpiringToday, isTaskRepeating} from "../utils.js";
+import {isTaskExpired, isTaskExpiringToday, isTaskRepeating} from "../utils/task.js";
 
 const taskToFilterMap = {
   all: (tasks) => tasks.filter((task) => !task.isArchive).length, // посчитает все не заархивированные задачи
