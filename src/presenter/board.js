@@ -92,7 +92,7 @@ export default class Board {
     this._renderTaskCount += TASK_COUNT_PER_STEP;
 
     if (this._renderTaskCount >= this._boardTasks.length) {
-      remove(this._loadMoreButtonComponent); // не работает
+      remove(this._loadMoreButtonComponent);
     }
   }
 
