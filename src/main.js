@@ -14,6 +14,11 @@ const siteHeader = main.querySelector(`.main__control`);
 
 const boardPresenter = new BoardPresenter(main);
 
+// отрисовывает меню
 render(siteHeader, new SiteMenuView(), RenderPosition.BEFOREEND);
+
+// отрисовывает фильтры
 render(main, new FilterView(filters), RenderPosition.BEFOREEND);
+
+// отрисовывает доску со всем содержимым
 boardPresenter.init(tasks);
