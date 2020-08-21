@@ -21,16 +21,17 @@ export default class Sort extends AbstractView {
   }
 
   _sortTypeChangeHandler(evt) {
+    // если событие произошло не на <а>, ничего не делай
     if (evt.target.tagName !== `A`) {
       return;
     }
-
     evt.preventDefault();
-    this._callback.sortTypeChange(evt.target.dataset.SortType);
+    this._callback.sortTypeChange(evt.target.dataset.sortType);
   }
 
   setSortTypeChangeHandler(callback) {
     this._callback.sortTypeChange = callback;
+    // устанавливаем обработчик на div, чтобы использовать делегирование
     this.getElement().addEventListener(`click`, this._sortTypeChangeHandler);
   }
 }
