@@ -1,6 +1,10 @@
 import {COLORS} from "../const.js";
 import {getRandomInteger} from "../utils/common.js";
 
+// для идентефикации конкретной задачи
+// нельзя использовать в продакшн!
+const generateId = () => Date.now() + parseInt(Math.random() * 1000, 10);
+
 
 const generateDescription = () => {
   const descriptions = [
@@ -64,6 +68,7 @@ export const generateTask = () => {
   };
 
   return {
+    id: generateId(),
     description: generateDescription(),
     dueDate,
     repeating,
