@@ -2,12 +2,12 @@ import BoardView from "../view/board.js";
 import SortView from "../view/sort.js";
 import TaskListView from "../view/task-list.js";
 import NoTaskView from "../view/no-task.js";
-import TaskView from "../view/task.js";
-import TaskEditView from "../view/task-edit.js";
+import TaskPresenter from "../presenter/task.js";
 import LoadMoreButtonView from "../view/load-button.js";
 import {sortTaskUp, sortTaskDown} from "../utils/task.js";
-import {render, RenderPosition, replace, remove} from "../utils/render.js";
+import {render, RenderPosition, remove} from "../utils/render.js";
 import {SortType} from "../const.js";
+import {updateItem} from "../utils/common.js";
 
 const TASK_COUNT_PER_STEP = 8;
 
@@ -16,6 +16,7 @@ export default class Board {
     this._boardContainer = boardContainer;
     this._renderedTaskCount = TASK_COUNT_PER_STEP;
     this._currentSortType = SortType.DEFAULT;
+    this._taskPresenter = {}; // переменная для хранения колбеков
 
     this._boardComponent = new BoardView();
     this._sortComponent = new SortView();
@@ -25,6 +26,8 @@ export default class Board {
 
     this._handleLoadMoreButtonClick = this._handleLoadMoreButtonClick.bind(this);
     this._handleSortTypeChange = this._handleSortTypeChange.bind(this);
+    this._handleTaskChange = this._handleTaskChange.bind(this);
+    this._handleModeChange = this._handleModeChange.bind(this);
   }
 
   init(boardTasks) {
@@ -41,6 +44,25 @@ export default class Board {
     render(this._boardComponent, this._taskListComponent, RenderPosition.BEFOREEND);
 
     this._renderBoard();
+  }
+
+  _handleModeChange() {
+    Object
+      .values(this._taskPresenter)
+      .forEach((presenter) => presenter.resetView());
+  }
+
+  // updatedTask сообщает какой элемент хотим обновить
+  _handleTaskChange(updatedTask) {
+    // обновляет элемент в моках
+    // объект с обновленной задачей подставляется в массивы this._boardTasks
+    // и this._sourcedBoardTask
+    this._boardTasks = updateItem(this._boardTasks, updatedTask);
+    this._sourcedBoardTask = updateItem(this._sourcedBoardTask, updatedTask);
+
+    // вызывает init у существующего TaskPresenter, передав обновленные данные,
+    // что приводит к перерисовке карточки
+    this._taskPresenter[updatedTask.id].init(updatedTask);
   }
 
   _sortTasks(sortType) {
@@ -75,42 +97,27 @@ export default class Board {
   }
 
   _clearTaskList() {
-    this._taskListComponent.getElement().innerHTML = ``;
+    // заменяем innerHTML. Находим у объекта this._taskPresenter все
+    // значения - все задачи и у каждой вызываем метод destroy()
+    Object
+      .values(this._taskPresenter)
+      .forEach((presenter) => presenter.destroy());
+
+    // обнуляем объект this._taskPresenter
+    this._taskPresenter = {};
+
     this._renderedTaskCount = TASK_COUNT_PER_STEP;
   }
 
 
   _renderTask(task) {
-    const taskComponent = new TaskView(task);
-    const taskEditComponent = new TaskEditView(task);
-
-    const replaceCardToForm = () => {
-      replace(taskEditComponent, taskComponent);
-    };
-
-    const replaceFormToCard = () => {
-      replace(taskComponent, taskEditComponent);
-    };
-
-    const onEscKeyDown = (evt) => {
-      if (evt.key === `Escape` || evt.key === `Esc`) {
-        evt.preventDefault();
-        replaceFormToCard();
-        document.removeEventListener(`keydown`, onEscKeyDown);
-      }
-    };
-
-    taskComponent.setEditClickHandler(() => {
-      replaceCardToForm();
-      document.addEventListener(`keydown`, onEscKeyDown);
-    });
-
-    taskEditComponent.setFormSubmitHandler(() => {
-      replaceFormToCard();
-      document.removeEventListener(`keydown`, onEscKeyDown);
-    });
-
-    render(this._taskListComponent, taskComponent, RenderPosition.BEFOREEND);
+    const taskPresenter = new TaskPresenter(this._taskListComponent, this._handleTaskChange, this._handleModeChange);
+    taskPresenter.init(task);
+    // запоминаем экземпляр taskPresenter в свойство this._taskPresenter,
+    // где ключом выступает task.id, а занчением сам целый презентер
+    // из-за этой записи есть объект this._taskPresenter,
+    // который помнит все презентеры
+    this._taskPresenter[task.id] = taskPresenter;
   }
 
 
