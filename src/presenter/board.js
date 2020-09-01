@@ -6,14 +6,14 @@ import TaskPresenter from "../presenter/task.js";
 import LoadMoreButtonView from "../view/load-button.js";
 import {sortTaskUp, sortTaskDown} from "../utils/task.js";
 import {render, RenderPosition, remove} from "../utils/render.js";
-import {SortType} from "../const.js";
-import {updateItem} from "../utils/common.js";
+import {SortType, UserAction, UpdateType} from "../const.js";
 
 const TASK_COUNT_PER_STEP = 8;
 
 export default class Board {
-  constructor(boardContainer) {
+  constructor(boardContainer, TasksModel) {
     this._boardContainer = boardContainer;
+    this._tasksModel = TasksModel;
     this._renderedTaskCount = TASK_COUNT_PER_STEP;
     this._currentSortType = SortType.DEFAULT;
     this._taskPresenter = {}; // переменная для хранения колбеков
@@ -26,17 +26,19 @@ export default class Board {
 
     this._handleLoadMoreButtonClick = this._handleLoadMoreButtonClick.bind(this);
     this._handleSortTypeChange = this._handleSortTypeChange.bind(this);
-    this._handleTaskChange = this._handleTaskChange.bind(this);
+    this._handleViewAction = this._handleViewAction.bind(this);
+    this._handleModelEvent = this._handleModelEvent.bind(this);
     this._handleModeChange = this._handleModeChange.bind(this);
+
+    // добавляем в массив обзерверов TasksModel
+    // обработчик-наблюдатель _handleModelEvent,
+    // который будет реагировать на изменения модели
+    // когда произойдет изменение Model, она будет вызывать
+    // этот колбэк
+    this._tasksModel.addObserver(this._handleModelEvent);
   }
 
-  init(boardTasks) {
-    // бэкап списка задач
-    this._boardTasks = boardTasks.slice();
-
-    // бэкап списка задач для сортировки по умолчанию
-    this._sourcedBoardTask = boardTasks.slice();
-
+  init() {
     // отрисовывает доску со всем содержимым
     render(this._boardContainer, this._boardComponent, RenderPosition.BEFOREEND);
 
@@ -46,37 +48,72 @@ export default class Board {
     this._renderBoard();
   }
 
+  // добавим обертку над методом модели для получения задач,
+  // в будущем так будет удобнее получать из модели данные в презенторе
+  _getTasks() {
+    switch (this._currentSortType) {
+      case SortType.DATE_UP:
+        return this._tasksModel.getTasks().slice().sort(sortTaskUp);
+      case SortType.DATE_DOWN:
+        return this._tasksModel.getTasks().slice().sort(sortTaskDown);
+    }
+
+    return this._tasksModel.getTasks();
+  }
+
   _handleModeChange() {
     Object
       .values(this._taskPresenter)
       .forEach((presenter) => presenter.resetView());
   }
 
-  // updatedTask сообщает какой элемент хотим обновить
-  _handleTaskChange(updatedTask) {
-    // обновляет элемент в моках
-    // объект с обновленной задачей подставляется в массивы this._boardTasks
-    // и this._sourcedBoardTask
-    this._boardTasks = updateItem(this._boardTasks, updatedTask);
-    this._sourcedBoardTask = updateItem(this._sourcedBoardTask, updatedTask);
+  // Здесь будем вызывать обновление модели.
+  // actionType - действие пользователя, нужно чтобы понять, какой метод модели вызвать
+  // updateType - тип изменений, нужно чтобы понять, что после нужно обновить
+  // update - обновленные данные
+  // этот обработчик ПЕРЕДАЕМ В TaskPresenter!
+  // Мы больше не вызываем изменение задачи напрямую,
+  // а делегируем ее изменение модели, задача презентера - обработать
+  // действие пользователя
+  // handleViewAction - обработать действие на View (представлении)
+  _handleViewAction(actionType, updateType, update) {
 
-    // вызывает init у существующего TaskPresenter, передав обновленные данные,
-    // что приводит к перерисовке карточки
-    this._taskPresenter[updatedTask.id].init(updatedTask);
+    switch (actionType) {
+      case UserAction.UPDATE_TASK:
+        this._tasksModel.updateTask(updateType, update);
+        break;
+
+      case UserAction.ADD_TASK:
+        this._tasksModel.addTask(updateType, update);
+        break;
+
+      case UserAction.DELETE_TASK:
+        this._tasksModel.deleteTask(updateType, update);
+        break;
+    }
   }
 
-  _sortTasks(sortType) {
-    switch (sortType) {
-      case SortType.DATE_UP:
-        this._boardTasks.sort(sortTaskUp);
+  // В зависимости от типа изменений решаем, что делать:
+  // - обновить часть списка (например, когда поменялось описание)
+  // - обновить список (например, когда задача ушла в архив)
+  // - обновить всю доску (например, при переключении фильтра)
+  // обработчик-наблюдатель _handleModelEvent,
+  // который будет реагировать на изменения модели
+  _handleModelEvent(updateType, update) {
+    switch (updateType) {
+      case UpdateType.PATCH:
+        // перерендер только карточки
+        this._taskPresenter[update.id].init(update);
         break;
-      case SortType.DATE_DOWN:
-        this._boardTasks.sort(sortTaskDown);
+
+      case UpdateType.MINOR:
+        // перерендер листа задач
         break;
-      default:
-        this._boardTasks = this._sourcedBoardTask.slice();
+
+      case UpdateType.MAJOR:
+        // перерендер всей доски с сортировкой и кнопкой Load More
+        break;
     }
-    this._currentSortType = sortType;
   }
 
   _handleSortTypeChange(sortType) {
@@ -84,7 +121,8 @@ export default class Board {
     if (this._currentSortType === sortType) {
       return;
     }
-    this._sortTasks(sortType);
+
+    this._currentSortType = sortType;
     // очищаем список
     this._clearTaskList();
     // рендерим задачи
@@ -111,7 +149,7 @@ export default class Board {
 
 
   _renderTask(task) {
-    const taskPresenter = new TaskPresenter(this._taskListComponent, this._handleTaskChange, this._handleModeChange);
+    const taskPresenter = new TaskPresenter(this._taskListComponent, this._handleViewAction, this._handleModeChange);
     taskPresenter.init(task);
     // запоминаем экземпляр taskPresenter в свойство this._taskPresenter,
     // где ключом выступает task.id, а занчением сам целый презентер
@@ -120,24 +158,23 @@ export default class Board {
     this._taskPresenter[task.id] = taskPresenter;
   }
 
-
-  _renderTasks(from, to) {
-    this._boardTasks
-      .slice(from, to)
-      .forEach((boardTask) => this._renderTask(boardTask));
+  _renderTasks(tasks) {
+    tasks.forEach((task) => this._renderTask(task));
   }
-
 
   _renderNoTasks() {
     render(this._boardComponent, this._noTaskComponent, RenderPosition.AFTERBEGIN);
   }
 
-
   _handleLoadMoreButtonClick() {
-    this._renderTasks(this._renderedTaskCount, this._renderedTaskCount + TASK_COUNT_PER_STEP);
-    this._renderedTaskCount += TASK_COUNT_PER_STEP;
+    const taskCount = this._getTasks().length;
+    const newRenderedTaskCount = Math.min(taskCount, this._renderedTaskCount + TASK_COUNT_PER_STEP);
+    const tasks = this._getTasks().slice(this._renderedTaskCount, newRenderedTaskCount);
 
-    if (this._renderedTaskCount >= this._boardTasks.length) {
+    this._renderTasks(tasks);
+    this._renderedTaskCount = newRenderedTaskCount;
+
+    if (this._renderedTaskCount >= taskCount) {
       remove(this._loadMoreButtonComponent);
     }
   }
@@ -148,16 +185,19 @@ export default class Board {
   }
 
   _renderTaskList() {
-    this._renderTasks(0, Math.min(this._boardTasks.length, TASK_COUNT_PER_STEP));
+    const taskCount = this._getTasks().length;
+    const tasks = this._getTasks().slice(0, Math.min(taskCount, TASK_COUNT_PER_STEP));
 
-    if (this._boardTasks.length > TASK_COUNT_PER_STEP) {
+    this._renderTasks(tasks);
+
+    if (taskCount > TASK_COUNT_PER_STEP) {
       this._renderLoadMoreButton();
     }
   }
 
   _renderBoard() {
     // если все задачи в архиве, рисуй заглушку
-    if (this._boardTasks.every((task) => task.isArchive)) {
+    if (this._getTasks().every((task) => task.isArchive)) {
       this._renderNoTasks();
       return;
     }
