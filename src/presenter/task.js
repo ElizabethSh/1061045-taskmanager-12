@@ -1,11 +1,8 @@
 import TaskView from "../view/task.js";
 import TaskEditView from "../view/task-edit.js";
 import {render, RenderPosition, replace, remove} from "../utils/render.js";
+import {Mode, UserAction, UpdateType} from "../const.js";
 
-const Mode = {
-  DEFAULT: `DEFAULT`,
-  EDITING: `EDITING`
-};
 
 export default class Task {
   constructor(taskListContainer, changeData, changeMode) {
@@ -103,6 +100,8 @@ export default class Task {
   _handleFavoriteClick() {
     // 3. отдать обратно в _changeData
     this._changeData(
+        UserAction.UPDATE_TASK,
+        UpdateType.MINOR,
         Object.assign(
             {},
             // 1. взять задачу
@@ -117,6 +116,8 @@ export default class Task {
   _handleArchiveClick() {
     // 3. отдать обратно в _changeData
     this._changeData(
+        UserAction.UPDATE_TASK,
+        UpdateType.MINOR,
         Object.assign(
             {},
             // 1. взять задачу
@@ -129,7 +130,10 @@ export default class Task {
   }
 
   _handleFormSubmit(task) {
-    this._changeData(task);
+    this._changeData(
+        UserAction.UPDATE_TASK,
+        UpdateType.MINOR,
+        task);
     this._replaceFormToCard();
   }
 }
