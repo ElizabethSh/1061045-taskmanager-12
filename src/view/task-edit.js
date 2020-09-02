@@ -1,3 +1,4 @@
+import he from "he";
 import SmartView from "./smart.js";
 import {COLORS} from "../const.js";
 import {isTaskExpired, humanizeTaskDueDate, isTaskRepeating} from "../utils/task.js";
@@ -112,7 +113,7 @@ const createTaskEditTemplate = (data) => {
                 class="card__text"
                 placeholder="Start typing your text here..."
                 name="text"
-              >${description}</textarea>
+              >${he.encode(description)}</textarea>
             </label>
           </div>
 
@@ -147,6 +148,7 @@ export default class TaskEdit extends SmartView {
     super();
     this._data = TaskEdit.parseTaskToData(task);
     this._formSubmitHandler = this._formSubmitHandler.bind(this);
+    this._formDeleteClickHandler = this._formDeleteClickHandler.bind(this);
     this._descriptionInputHahdler = this._descriptionInputHahdler.bind(this);
     this._dueDateToggleHandler = this._dueDateToggleHandler.bind(this);
     this._repeatingToggleHandler = this._repeatingToggleHandler.bind(this);
@@ -157,23 +159,33 @@ export default class TaskEdit extends SmartView {
     this._setInnerHandlers();
   }
 
+  removeElement() {
+    super.removeElement();
+
+    if (this._datepicker) {
+      this._datepicker.destroy();
+      this._datepicker = null;
+    }
+  }
+
   reset(task) {
     this.updateData(
         TaskEdit.parseTaskToData(task)
     );
   }
 
-  _getTemplate() {
-    return createTaskEditTemplate(this._data);
-  }
-
   // метод восстановления всех обработчиков
   restoreHandlers() {
     this._setInnerHandlers();
     this.setFormSubmitHandler(this._callback.formSubmit);
+    this.setDeleteClickHandler(this._callback.deleteClick);
   }
 
-  // метод установки внутренних обработчиковб только то
+  _getTemplate() {
+    return createTaskEditTemplate(this._data);
+  }
+
+  // метод установки внутренних обработчиков, только то
   // что касается формы редактирования
   _setInnerHandlers() {
     // обработчик на кнопку даты
@@ -231,7 +243,6 @@ export default class TaskEdit extends SmartView {
       // то есть когда "!this._data.isDueDate === true",
       // тогда isRepeating должно быть строго false,
       // что достигается логическим оператором &&
-
       isRepeating: !this._data.isDueDate && false
     });
   }
@@ -264,9 +275,21 @@ export default class TaskEdit extends SmartView {
     this._callback.formSubmit(TaskEdit.parseDataToTask(this._data));
   }
 
+  _formDeleteClickHandler(evt) {
+    evt.preventDefault();
+    this._callback.deleteClick(TaskEdit.parseDataToTask(this._data));
+  }
+
   setFormSubmitHandler(callback) {
     this._callback.formSubmit = callback;
     this.getElement().addEventListener(`submit`, this._formSubmitHandler);
+  }
+
+  setDeleteClickHandler(callback) {
+    this._callback.deleteClick = callback;
+    this.getElement()
+        .querySelector(`.card__delete`)
+        .addEventListener(`click`, this._formDeleteClickHandler);
   }
 
   // метод берет объект с задачей из мокк и приписывает к нему
