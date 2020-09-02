@@ -3,7 +3,7 @@ import {getRandomInteger} from "../utils/common.js";
 
 // для идентефикации конкретной задачи
 // нельзя использовать в продакшн!
-const generateId = () => Date.now() + parseInt(Math.random() * 1000, 10);
+export const generateId = () => Date.now() + parseInt(Math.random() * 1000, 10);
 
 
 const generateDescription = () => {
