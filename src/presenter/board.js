@@ -3,26 +3,29 @@ import SortView from "../view/sort.js";
 import TaskListView from "../view/task-list.js";
 import NoTaskView from "../view/no-task.js";
 import TaskPresenter from "../presenter/task.js";
+import TaskNewPresenter from "../presenter/task-new.js";
 import LoadMoreButtonView from "../view/load-button.js";
+import {filter} from "../utils/filter.js";
 import {sortTaskUp, sortTaskDown} from "../utils/task.js";
 import {render, RenderPosition, remove} from "../utils/render.js";
-import {SortType, UserAction, UpdateType} from "../const.js";
+import {SortType, UserAction, UpdateType, FilterType} from "../const.js";
 
 const TASK_COUNT_PER_STEP = 8;
 
 export default class Board {
-  constructor(boardContainer, TasksModel) {
+  constructor(boardContainer, TasksModel, filterModel) {
     this._boardContainer = boardContainer;
     this._tasksModel = TasksModel;
+    this._filterModel = filterModel;
     this._renderedTaskCount = TASK_COUNT_PER_STEP;
     this._currentSortType = SortType.DEFAULT;
     this._taskPresenter = {}; // переменная для хранения колбеков
 
     this._boardComponent = new BoardView();
-    this._sortComponent = new SortView();
+    this._sortComponent = null;
     this._taskListComponent = new TaskListView();
     this._noTaskComponent = new NoTaskView();
-    this._loadMoreButtonComponent = new LoadMoreButtonView();
+    this._loadMoreButtonComponent = null;
 
     this._handleLoadMoreButtonClick = this._handleLoadMoreButtonClick.bind(this);
     this._handleSortTypeChange = this._handleSortTypeChange.bind(this);
@@ -36,6 +39,9 @@ export default class Board {
     // когда произойдет изменение Model, она будет вызывать
     // этот колбэк
     this._tasksModel.addObserver(this._handleModelEvent);
+    this._filterModel.addObserver(this._handleModelEvent);
+
+    this._taskNewPresenter = new TaskNewPresenter(this._taskListComponent, this._handleViewAction);
   }
 
   init() {
@@ -48,20 +54,32 @@ export default class Board {
     this._renderBoard();
   }
 
+  createTask() {
+    this._currentSortType = SortType.DEFAULT;
+    this._filterModel.setFilter(UpdateType.MAJOR, FilterType.ALL);
+
+    this._taskNewPresenter.init();
+  }
+
   // добавим обертку над методом модели для получения задач,
   // в будущем так будет удобнее получать из модели данные в презенторе
   _getTasks() {
+    const filterType = this._filterModel.getFilter();
+    const tasks = this._tasksModel.getTasks();
+    const filteredTasks = filter[filterType](tasks);
+
     switch (this._currentSortType) {
       case SortType.DATE_UP:
-        return this._tasksModel.getTasks().slice().sort(sortTaskUp);
+        return filteredTasks.sort(sortTaskUp);
       case SortType.DATE_DOWN:
-        return this._tasksModel.getTasks().slice().sort(sortTaskDown);
+        return filteredTasks.sort(sortTaskDown);
     }
 
-    return this._tasksModel.getTasks();
+    return filteredTasks;
   }
 
   _handleModeChange() {
+    this._taskNewPresenter.destroy();
     Object
       .values(this._taskPresenter)
       .forEach((presenter) => presenter.resetView());
@@ -99,19 +117,23 @@ export default class Board {
   // - обновить всю доску (например, при переключении фильтра)
   // обработчик-наблюдатель _handleModelEvent,
   // который будет реагировать на изменения модели
-  _handleModelEvent(updateType, update) {
+  _handleModelEvent(updateType, data) {
     switch (updateType) {
       case UpdateType.PATCH:
         // перерендер только карточки
-        this._taskPresenter[update.id].init(update);
+        this._taskPresenter[data.id].init(data);
         break;
 
       case UpdateType.MINOR:
         // перерендер листа задач
+        this._clearBoard();
+        this._renderBoard();
         break;
 
       case UpdateType.MAJOR:
         // перерендер всей доски с сортировкой и кнопкой Load More
+        this._clearBoard({resetRenderedTaskCount: true, resetSortType: true});
+        this._renderBoard();
         break;
     }
   }
@@ -124,29 +146,18 @@ export default class Board {
 
     this._currentSortType = sortType;
     // очищаем список
-    this._clearTaskList();
+    this._clearBoard({resetRenderedTaskCount: true});
     // рендерим задачи
-    this._renderTaskList();
+    this._renderBoard();
   }
 
   _renderSort() {
-    render(this._boardComponent, this._sortComponent, RenderPosition.AFTERBEGIN);
+    this._sortComponent = new SortView(this._currentSortType);
+
     this._sortComponent.setSortTypeChangeHandler(this._handleSortTypeChange);
+
+    render(this._boardComponent, this._sortComponent, RenderPosition.AFTERBEGIN);
   }
-
-  _clearTaskList() {
-    // заменяем innerHTML. Находим у объекта this._taskPresenter все
-    // значения - все задачи и у каждой вызываем метод destroy()
-    Object
-      .values(this._taskPresenter)
-      .forEach((presenter) => presenter.destroy());
-
-    // обнуляем объект this._taskPresenter
-    this._taskPresenter = {};
-
-    this._renderedTaskCount = TASK_COUNT_PER_STEP;
-  }
-
 
   _renderTask(task) {
     const taskPresenter = new TaskPresenter(this._taskListComponent, this._handleViewAction, this._handleModeChange);
@@ -180,29 +191,62 @@ export default class Board {
   }
 
   _renderLoadMoreButton() {
-    render(this._boardComponent, this._loadMoreButtonComponent, RenderPosition.BEFOREEND);
+    this._loadMoreButtonComponent = new LoadMoreButtonView();
     this._loadMoreButtonComponent.setClickHandler(this._handleLoadMoreButtonClick);
+
+    render(this._boardComponent, this._loadMoreButtonComponent, RenderPosition.BEFOREEND);
   }
 
-  _renderTaskList() {
+  // метод для очистки доски
+  // флаги у resetRenderedTaskCount и resetSortType говорят о
+  // типе изменений (MINOR(false) or MAJOR(true))
+  _clearBoard({resetRenderedTaskCount = false, resetSortType = false} = {}) {
+    // получаем кол-во задач на момент очистки доски
     const taskCount = this._getTasks().length;
-    const tasks = this._getTasks().slice(0, Math.min(taskCount, TASK_COUNT_PER_STEP));
 
-    this._renderTasks(tasks);
+    this._taskNewPresenter.destroy();
 
-    if (taskCount > TASK_COUNT_PER_STEP) {
-      this._renderLoadMoreButton();
+    // удаление всех задач
+    Object
+      .values(this._taskPresenter)
+      .forEach((presenter) => presenter.destroy());
+    this._taskPresenter = {};
+
+    remove(this._sortComponent); // удаление сортировки
+    remove(this._noTaskComponent); // удаление заглушки "Нет задач"
+    remove(this._loadMoreButtonComponent); // удаление кнопки допоказа
+
+    // проверка нужно ли сбрасывать кол-во показанных задач
+    if (resetRenderedTaskCount) {
+      // если нужно, делаем их кол-вом по умолчанию
+      this._renderedTaskCount = TASK_COUNT_PER_STEP;
+    } else {
+      // если нет, нужно оставить кол-во задач, кот. было показано
+      // если было изменение кол-ва задач, корректируем кол-ва показанных задач
+      this._renderedTaskCount = Math.min(taskCount, this._renderedTaskCount);
+    }
+
+    // если сбрасывается сортировка, то по умолчанию она д.б. SortType.DEFAULT
+    if (resetSortType) {
+      this._currentSortType = SortType.DEFAULT;
     }
   }
 
   _renderBoard() {
-    // если все задачи в архиве, рисуй заглушку
-    if (this._getTasks().every((task) => task.isArchive)) {
+    const tasks = this._getTasks();
+    const taskCount = tasks.length;
+
+    if (taskCount === 0) {
       this._renderNoTasks();
       return;
     }
 
-    this._renderSort(); // рисует сортировку
-    this._renderTaskList(); // рисует список задач
+    this._renderSort();
+
+    this._renderTasks(tasks.slice(0, Math.min(taskCount, this._renderedTaskCount)));
+
+    if (taskCount > this._renderedTaskCount) {
+      this._renderLoadMoreButton();
+    }
   }
 }
