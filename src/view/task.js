@@ -1,13 +1,12 @@
 import he from "he";
 import AbstractView from "./abstract.js";
-import {isTaskExpired, humanizeTaskDueDate, isTaskRepeating} from "../utils/task.js";
+import {isTaskExpired, formatTaskDueDate, isTaskRepeating} from "../utils/task.js";
 
 const createTaskTemplate = (task) => {
   const {color, description, dueDate, repeating, isFavorite, isArchive} = task;
 
   // если есть дата дедлайна, приводит ее в человеческий вид
-  const date = (dueDate !== null)
-    ? humanizeTaskDueDate(dueDate) : ``;
+  const date = formatTaskDueDate(dueDate);
 
   // если есть дедлайн, добавляет соответствующий класс
   const deadlineClassName = isTaskExpired(dueDate) ? `card--deadline` : ``;
