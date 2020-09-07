@@ -1,3 +1,5 @@
+import moment from "moment";
+
 export const getCurrentDate = () => {
   const currentDate = new Date();
   currentDate.setHours(23, 59, 59, 999); // будем считать срок у всех задач - это 23:59:59 установленной даты
@@ -5,8 +7,12 @@ export const getCurrentDate = () => {
 };
 
 // функция перевода даты в человеческий вид
-export const humanizeTaskDueDate = (dueDate) => {
-  return dueDate.toLocaleString(`en-US`, {day: `numeric`, month: `long`});
+export const formatTaskDueDate = (dueDate) => {
+  if (!(dueDate instanceof Date)) {
+    return ``;
+  }
+
+  return moment(dueDate).format(`D MMMM`);
 };
 
 // Функция для определения просрочена ли дата (true/false)
@@ -17,7 +23,8 @@ export const isTaskExpired = (dueDate) => {
 
   const currentDate = getCurrentDate();
 
-  return currentDate.getTime() > dueDate.getTime();
+  // return currentDate.getTime() > dueDate.getTime();
+  return moment(currentDate).isAfter(dueDate, `day`);
 };
 
 // функция определяет истекает ли дата сегодня (true/false)
@@ -27,7 +34,8 @@ export const isTaskExpiringToday = (dueDate) => {
   }
 
   const currentDate = getCurrentDate();
-  return currentDate.getTime() === dueDate.getTime();
+  // return currentDate.getTime() === dueDate.getTime();
+  return moment(dueDate).isSame(currentDate, `day`);
 };
 
 // функция для определения повторяемости задачи (true/false)
@@ -78,5 +86,6 @@ export const isDatesEqual = (dateA, dateB) => {
   if (dateA === null && dateB === null) {
     return true;
   }
-  return dateA.getTime() === dateB.getTime();
+  // return dateA.getTime() === dateB.getTime();
+  return moment(dateA).isSame(dateB, `day`);
 };
