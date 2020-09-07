@@ -1,7 +1,10 @@
 import he from "he";
 import SmartView from "./smart.js";
 import {COLORS} from "../const.js";
-import {isTaskExpired, humanizeTaskDueDate, isTaskRepeating} from "../utils/task.js";
+import {formatTaskDueDate, isTaskRepeating} from "../utils/task.js";
+import flatpickr from "flatpickr";
+
+import "../../node_modules/flatpickr/dist/flatpickr.min.css";
 
 const BLANK_TASK = {
   color: COLORS[0],
@@ -32,7 +35,7 @@ const createTaskEditDateTemplate = (dueDate, isDueDate) => {
         type="text"
         placeholder=""
         name="date"
-        value="${dueDate !== null ? humanizeTaskDueDate(dueDate) : ``}"
+        value="${formatTaskDueDate(dueDate)}"
       />
     </label>
   </fieldset>` : ``}
@@ -81,10 +84,6 @@ const createTaskEditTemplate = (data) => {
 
   const {color, description, dueDate, repeating, isDueDate, isRepeating} = data;
 
-  // если задача с дедлайном, добавляет класс card--deadline
-  const deadlineClassName = isTaskExpired(dueDate)
-    ? `card--deadline` : ``;
-
   // получает шаблон в зависимости от ситуации
   const dateTemplate = createTaskEditDateTemplate(dueDate, isDueDate);
 
@@ -95,10 +94,14 @@ const createTaskEditTemplate = (data) => {
   const repeatingTemplate = createTaskEditRepeatingTemplate(repeating, isRepeating);
   const colorsTemplate = createTaskEditColorsTemplate(color);
 
-  const isSubmitDisabled = isRepeating & !isTaskRepeating(repeating);
+  // блокировать кнопку или нет:
+  // если DATE: Yes, но дата не выбрана
+  // ИЛИ
+  // если REPEAT:YES, но дни повторений не выбраны
+  const isSubmitDisabled = (isDueDate && dueDate === null) || (isRepeating && !isTaskRepeating(repeating));
 
   return (
-    `<article class="card card--edit card--${color} ${repeatingClassName} ${deadlineClassName} ">
+    `<article class="card card--edit card--${color} ${repeatingClassName}">
       <form class="card__form" method="get">
         <div class="card__inner">
           <div class="card__color-bar">
@@ -147,16 +150,20 @@ export default class TaskEdit extends SmartView {
   constructor(task = BLANK_TASK) {
     super();
     this._data = TaskEdit.parseTaskToData(task);
+    this._datepicker = null;
+
     this._formSubmitHandler = this._formSubmitHandler.bind(this);
     this._formDeleteClickHandler = this._formDeleteClickHandler.bind(this);
     this._descriptionInputHahdler = this._descriptionInputHahdler.bind(this);
     this._dueDateToggleHandler = this._dueDateToggleHandler.bind(this);
+    this._dueDateChangeHandler = this._dueDateChangeHandler.bind(this);
     this._repeatingToggleHandler = this._repeatingToggleHandler.bind(this);
     this._colorChangeHandler = this._colorChangeHandler.bind(this);
     this._repeatingChangeHandler = this._repeatingChangeHandler.bind(this);
 
     // установка обработчиков при создании карточки (первый раз)
     this._setInnerHandlers();
+    this._setDatepicker();
   }
 
   removeElement() {
@@ -179,6 +186,30 @@ export default class TaskEdit extends SmartView {
     this._setInnerHandlers();
     this.setFormSubmitHandler(this._callback.formSubmit);
     this.setDeleteClickHandler(this._callback.deleteClick);
+    this._setDatepicker();
+  }
+
+  _setDatepicker() {
+    // flatpicker всегда нужно уничтожать если вдруг он не используется
+    // например когда в форме выбрано DATE:No (дата не выбрана)
+    if (this._datepicker) {
+      // если flatpicker существует, нужно его удалить
+      this._datepicker.destroy(); // метод библиотеки flatpicker
+      this._datepicker = null; // обнуляем ссылку
+    }
+
+    // flatpickr есть смысл инициализировать ТОЛЬКО в случае,
+    // если поле выбора даты доступно для заполнения DATE:Yes
+    if (this._data.dueDate) {
+      this._datepicker = flatpickr(
+          this.getElement().querySelector(`.card__date`),
+          {
+            dateFormat: `j F`,
+            defaultDate: this._data.dueDate,
+            onChange: this._dueDateChangeHandler // На событие flatpickr передаём наш колбэк
+          }
+      );
+    }
   }
 
   _getTemplate() {
@@ -220,6 +251,14 @@ export default class TaskEdit extends SmartView {
     evt.preventDefault();
     this.updateData({
       color: evt.target.value
+    });
+  }
+
+  _dueDateChangeHandler([userDate]) {
+    userDate.setHours(23, 59, 59, 999);
+
+    this.updateData({
+      dueDate: userDate
     });
   }
 
