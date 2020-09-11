@@ -1,26 +1,25 @@
 import SiteMenuView from "./view/site-menu.js";
 import StatisticsView from "./view/statistics.js";
-import {generateTask} from "./mock/task.js";
 import BoardPresenter from "./presenter/board.js";
 import FilterPresenter from "./presenter/filter.js";
 import TasksModel from "./model/tasks.js";
 import FilterModel from "./model/filter.js";
 import {render, RenderPosition, remove} from "./utils/render.js";
 import {MenuItem, UpdateType, FilterType} from "./const.js";
+import Api from "./api.js";
 
-const TASK_COUNT = 22;
-const tasks = new Array(TASK_COUNT).fill().map(generateTask);
+const AUTHORIZATION = `Basic hS2sd3dfSwcl1sa2j`;
+const END_POINT = `https://12.ecmascript.pages.academy/task-manager`; // адрес сервера
+
+const main = document.querySelector(`.main`);
+const siteHeader = main.querySelector(`.main__control`);
+const api = new Api(END_POINT, AUTHORIZATION);
 
 const tasksModel = new TasksModel();
 const filterModel = new FilterModel();
 
-tasksModel.setTasks(tasks);
-
-const main = document.querySelector(`.main`);
-const siteHeader = main.querySelector(`.main__control`);
 const siteMenuComponent = new SiteMenuView();
-
-const boardPresenter = new BoardPresenter(main, tasksModel, filterModel);
+const boardPresenter = new BoardPresenter(main, tasksModel, filterModel, api);
 const filterPresenter = new FilterPresenter(main, filterModel, tasksModel);
 
 // хэндлер, кот. будет вызван на собитие закрытия формы добавления задачи
@@ -76,13 +75,25 @@ const handleSiteMenuClick = (menuItem) => {
   }
 };
 
-siteMenuComponent.setMenuClickHandler(handleSiteMenuClick);
-
-// отрисовывает меню
-render(siteHeader, siteMenuComponent, RenderPosition.BEFOREEND);
-
 // отрисовывает фильтры
 filterPresenter.init();
 
 // отрисовывает доску со всем содержимым
 boardPresenter.init();
+
+// полученные с сервера задачи отправляем в tasksModel
+api.getTasks()
+  .then((tasks) => {
+    tasksModel.setTasks(UpdateType.INIT, tasks);
+    // отрисовывает меню
+    render(siteHeader, siteMenuComponent, RenderPosition.BEFOREEND);
+    siteMenuComponent.setMenuClickHandler(handleSiteMenuClick);
+  })
+  // сервер может не вернуть задачи, но приложение должно работать
+  // описываем catch, в который массива задач передаем пустой массив
+  .catch(() => {
+    tasksModel.setTasks(UpdateType.INIT, []);
+    // отрисовывает меню
+    render(siteHeader, siteMenuComponent, RenderPosition.BEFOREEND);
+    siteMenuComponent.setMenuClickHandler(handleSiteMenuClick);
+  });

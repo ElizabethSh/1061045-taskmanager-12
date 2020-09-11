@@ -28,7 +28,8 @@ export const UserAction = {
 export const UpdateType = {
   PATCH: `PATCH`,
   MINOR: `MINOR`,
-  MAJOR: `MAJOR`
+  MAJOR: `MAJOR`,
+  INIT: `INIT` // потребуется только один раз, при инициализации приложения, отображжает начальные данные
 };
 
 export const FilterType = {
