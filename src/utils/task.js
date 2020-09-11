@@ -89,3 +89,7 @@ export const isDatesEqual = (dateA, dateB) => {
   // return dateA.getTime() === dateB.getTime();
   return moment(dateA).isSame(dateB, `day`);
 };
+
+// для идентефикации конкретной задачи
+// нельзя использовать в продакшн!
+export const generateId = () => Date.now() + parseInt(Math.random() * 1000, 10);
